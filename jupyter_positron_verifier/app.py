@@ -6,8 +6,7 @@ import logging
 import os
 
 import httpx
-from fastapi import Depends, FastAPI, HTTPException
-from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
+from fastapi import Depends, FastAPI, HTTPException, Request
 from pydantic import BaseModel
 
 from .entitlement import EntitlementChecker
@@ -15,7 +14,6 @@ from .signing import Signer
 from .store import TokenStore
 
 logger = logging.getLogger(__name__)
-security = HTTPBearer()
 
 # ---------------------------------------------------------------------------
 # Module-level singletons (overridable in tests via dependency_overrides)
@@ -53,15 +51,21 @@ _hub_api_url = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api").r
 _service_token = os.environ.get("JUPYTERHUB_API_TOKEN", "")
 
 
-async def verify_hub_token(
-    credentials: HTTPAuthorizationCredentials = Depends(security),
-) -> str:
+async def verify_hub_token(request: Request) -> str:
     """Verify the caller's token using the Hub /authorizations/token endpoint.
+
+    Accepts both JupyterHub-style ``Authorization: token X`` and OAuth-style
+    ``Authorization: Bearer X`` so that jupyter-positron-server can use its
+    native JUPYTERHUB_API_TOKEN without scheme conversion.
 
     The service authenticates with its own token; the Hub tells us whether the
     caller's token is valid and which user it belongs to.
     """
-    caller_token = credentials.credentials
+    auth_header = request.headers.get("Authorization", "")
+    parts = auth_header.split(" ", 1)
+    if len(parts) != 2 or parts[0].lower() not in ("bearer", "token") or not parts[1]:
+        raise HTTPException(status_code=401, detail="Missing or invalid Authorization header")
+    caller_token = parts[1]
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(
