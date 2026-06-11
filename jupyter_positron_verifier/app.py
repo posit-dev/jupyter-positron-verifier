@@ -49,18 +49,24 @@ def get_store() -> TokenStore:
 # ---------------------------------------------------------------------------
 
 _hub_api_url = os.environ.get("JUPYTERHUB_API_URL", "http://hub:8081/hub/api").rstrip("/")
+# The service's own API token, set by JupyterHub when it launches this managed service.
+_service_token = os.environ.get("JUPYTERHUB_API_TOKEN", "")
 
 
 async def verify_hub_token(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> str:
-    """Verify the caller's JUPYTERHUB_API_TOKEN against the Hub /user endpoint."""
-    token = credentials.credentials
+    """Verify the caller's token using the Hub /authorizations/token endpoint.
+
+    The service authenticates with its own token; the Hub tells us whether the
+    caller's token is valid and which user it belongs to.
+    """
+    caller_token = credentials.credentials
     async with httpx.AsyncClient() as client:
         try:
             resp = await client.get(
-                f"{_hub_api_url}/user",
-                headers={"Authorization": f"token {token}"},
+                f"{_hub_api_url}/authorizations/token/{caller_token}",
+                headers={"Authorization": f"token {_service_token}"},
                 timeout=5,
             )
         except httpx.RequestError as e:
