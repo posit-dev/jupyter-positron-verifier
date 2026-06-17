@@ -137,7 +137,8 @@ def create_app(
         store_dep: TokenStore = Depends(get_store),
     ) -> MintResponse:
         """Mint a short-lived signed Positron license for the given connection token."""
-        if not await entitlement_dep.is_valid():
+        entitlement = await entitlement_dep.check()
+        if not entitlement.valid:
             raise HTTPException(status_code=403, detail="Positron Server license not valid")
 
         connection_token = request.connection_token.strip()
@@ -152,7 +153,7 @@ def create_app(
                 detail="A license for this connection token was already issued",
             )
 
-        license_json = signer_dep.mint(connection_token)
+        license_json = signer_dep.mint(connection_token, licensee=entitlement.licensee)
         logger.info(f"Issued license for token (first 8): {connection_token[:8]}...")
         return MintResponse(license=license_json)
 

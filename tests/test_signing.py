@@ -19,26 +19,24 @@ def test_timestamp_format():
 
 def test_mint_returns_valid_json(test_key_pair):
     _, private_pem, _ = test_key_pair
-    signer = Signer.from_pem(private_pem, issuer="Test Hub", licensee="Test Corp")
-    result = signer.mint("test-token-abc")
+    signer = Signer.from_pem(private_pem)
+    result = signer.mint("test-token-abc", licensee="Test Corp")
     obj = json.loads(result)
     assert obj["connection_token"] == "test-token-abc"
-    assert obj["issuer"] == "Test Hub"
     assert obj["licensee"] == "Test Corp"
     assert "timestamp" in obj
     assert "signature" in obj
+    assert "issuer" not in obj
 
 
 def test_signature_verifies_with_public_key(test_key_pair):
     private_key, private_pem, public_pem = test_key_pair
-    signer = Signer.from_pem(private_pem, issuer="Hub", licensee="Corp")
-    license_str = signer.mint("round-trip-token")
+    signer = Signer.from_pem(private_pem)
+    license_str = signer.mint("round-trip-token", licensee="Corp")
     obj = json.loads(license_str)
 
-    # Reconstruct payload the same way remoteLicenseKey.ts does it.
-    payload = (
-        obj["connection_token"] + obj["issuer"] + obj["licensee"] + obj["timestamp"]
-    ).encode()
+    # Only connection_token + timestamp are signed; licensee is not part of the payload.
+    payload = (obj["connection_token"] + obj["timestamp"]).encode()
     signature = base64.b64decode(obj["signature"])
 
     public_key = serialization.load_pem_public_key(public_pem.encode())
@@ -48,7 +46,7 @@ def test_signature_verifies_with_public_key(test_key_pair):
 
 def test_different_tokens_produce_different_signatures(test_key_pair):
     _, private_pem, _ = test_key_pair
-    signer = Signer.from_pem(private_pem, issuer="Hub", licensee="Corp")
+    signer = Signer.from_pem(private_pem)
     a = json.loads(signer.mint("token-a"))
     b = json.loads(signer.mint("token-b"))
     assert a["signature"] != b["signature"]
@@ -61,10 +59,13 @@ def test_from_env_missing_key(monkeypatch):
         Signer.from_env()
 
 
-def test_from_env_missing_issuer(monkeypatch, test_key_pair):
+def test_from_env_with_key_succeeds(monkeypatch, test_key_pair):
     _, private_pem, _ = test_key_pair
     monkeypatch.setenv("POSITRON_MINTING_KEY", private_pem)
-    monkeypatch.setenv("POSITRON_LICENSE_LICENSEE", "Corp")
+    # No issuer/licensee env vars are required any longer.
     monkeypatch.delenv("POSITRON_LICENSE_ISSUER", raising=False)
-    with pytest.raises(ValueError, match="POSITRON_LICENSE_ISSUER"):
-        Signer.from_env()
+    monkeypatch.delenv("POSITRON_LICENSE_LICENSEE", raising=False)
+    signer = Signer.from_env()
+    obj = json.loads(signer.mint("tok"))
+    assert obj["connection_token"] == "tok"
+    assert "issuer" not in obj

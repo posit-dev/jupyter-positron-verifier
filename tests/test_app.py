@@ -6,22 +6,25 @@ import pytest
 from fastapi.testclient import TestClient
 
 from jupyter_positron_verifier.app import MintResponse, MintRequest, create_app, verify_hub_token
-from jupyter_positron_verifier.entitlement import EntitlementChecker
+from jupyter_positron_verifier.entitlement import EntitlementChecker, EntitlementResult
 from jupyter_positron_verifier.signing import Signer
 from jupyter_positron_verifier.store import TokenStore
 
 
 class _FakeEntitlement(EntitlementChecker):
-    def __init__(self, valid: bool = True):
-        self._valid = valid
+    def __init__(self, valid: bool = True, licensee: str = "Test Corp"):
+        self._result = EntitlementResult(valid=valid, licensee=licensee)
+
+    async def check(self) -> EntitlementResult:
+        return self._result
 
     async def is_valid(self) -> bool:
-        return self._valid
+        return self._result.valid
 
 
 def _make_client(test_key_pair, *, entitlement_valid=True, override_auth=True):
     _, private_pem, _ = test_key_pair
-    signer = Signer.from_pem(private_pem, issuer="Test Hub", licensee="Test Corp")
+    signer = Signer.from_pem(private_pem)
     store = TokenStore()
     app = create_app(
         service_prefix="/services/positron-license",
@@ -46,10 +49,10 @@ class TestMintEndpoint:
         assert "license" in body
         obj = json.loads(body["license"])
         assert obj["connection_token"] == "conn-token-abc"
-        assert obj["issuer"] == "Test Hub"
         assert obj["licensee"] == "Test Corp"
         assert "timestamp" in obj
         assert "signature" in obj
+        assert "issuer" not in obj
 
     def test_duplicate_token_returns_409(self, test_key_pair):
         client = _make_client(test_key_pair)

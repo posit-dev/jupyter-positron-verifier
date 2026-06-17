@@ -3,8 +3,6 @@ RSA-PKCS1v1.5-SHA256 license minting.
 
 Matches the verification in Positron's remoteLicenseKey.ts:
   verifier.update(connection_token)
-  verifier.update(issuer)
-  verifier.update(licensee)
   verifier.update(timestamp)
   verifier.verify(publicKey, base64Decode(signature))
 """
@@ -32,31 +30,25 @@ def _js_timestamp() -> str:
 class Signer:
     """Mints signed Positron license tokens."""
 
-    def __init__(self, private_key: RSAPrivateKey, issuer: str, licensee: str):
+    def __init__(self, private_key: RSAPrivateKey):
         self._key = private_key
-        self.issuer = issuer
-        self.licensee = licensee
 
     @classmethod
-    def from_pem(cls, pem: str, issuer: str, licensee: str) -> "Signer":
+    def from_pem(cls, pem: str) -> "Signer":
         """Create a Signer directly from a PEM string (useful for tests)."""
         private_key = serialization.load_pem_private_key(pem.encode(), password=None)
         if not isinstance(private_key, RSAPrivateKey):
             raise TypeError("pem must be an RSA private key")
-        return cls(private_key, issuer, licensee)
+        return cls(private_key)
 
     @classmethod
     def from_env(cls) -> "Signer":
         """
-        Load signing key and identities from environment variables.
+        Load the signing key from environment variables.
 
         Key sources (first match wins):
           POSITRON_MINTING_KEY      PEM-encoded RSA private key (literal string)
           POSITRON_MINTING_KEY_FILE Path to a PEM-encoded RSA private key file
-
-        Identity:
-          POSITRON_LICENSE_ISSUER   Issuer name embedded in every license (required)
-          POSITRON_LICENSE_LICENSEE Licensee name embedded in every license (required)
         """
         pem = os.environ.get("POSITRON_MINTING_KEY")
         if not pem:
@@ -73,34 +65,27 @@ class Signer:
         if not isinstance(private_key, RSAPrivateKey):
             raise TypeError("POSITRON_MINTING_KEY must be an RSA private key")
 
-        issuer = os.environ.get("POSITRON_LICENSE_ISSUER")
-        licensee = os.environ.get("POSITRON_LICENSE_LICENSEE")
-        if not issuer or not licensee:
-            raise ValueError(
-                "POSITRON_LICENSE_ISSUER and POSITRON_LICENSE_LICENSEE must be set."
-            )
+        return cls(private_key)
 
-        return cls(private_key, issuer, licensee)
-
-    def mint(self, connection_token: str) -> str:
+    def mint(self, connection_token: str, licensee: str = "") -> str:
         """
         Sign a license for the given connection token and return the license JSON string.
 
-        The payload is the concatenation (as UTF-8 bytes) of:
-          connection_token + issuer + licensee + timestamp
-        matching the field update order in remoteLicenseKey.ts.
+        Only the connection token and timestamp are signed -- the payload is the
+        concatenation (as UTF-8 bytes) of connection_token + timestamp, matching
+        the field update order in remoteLicenseKey.ts. The licensee is included in
+        the JSON for display but is informational and not part of the signed payload.
         """
         timestamp = _js_timestamp()
-        payload = (connection_token + self.issuer + self.licensee + timestamp).encode()
+        payload = (connection_token + timestamp).encode()
 
         signature_bytes = self._key.sign(payload, padding.PKCS1v15(), hashes.SHA256())
         signature_b64 = base64.b64encode(signature_bytes).decode()
 
         license_obj = {
             "connection_token": connection_token,
-            "issuer": self.issuer,
-            "licensee": self.licensee,
             "timestamp": timestamp,
+            "licensee": licensee,
             "signature": signature_b64,
         }
         return json.dumps(license_obj)
