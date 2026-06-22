@@ -24,9 +24,9 @@ def test_mint_returns_valid_json(test_key_pair):
     obj = json.loads(result)
     assert obj["connection_token"] == "test-token-abc"
     assert obj["licensee"] == "Test Corp"
+    assert obj["issuer"] == ""
     assert "timestamp" in obj
     assert "signature" in obj
-    assert "issuer" not in obj
 
 
 def test_signature_verifies_with_public_key(test_key_pair):
@@ -35,8 +35,10 @@ def test_signature_verifies_with_public_key(test_key_pair):
     license_str = signer.mint("round-trip-token", licensee="Corp")
     obj = json.loads(license_str)
 
-    # Only connection_token + timestamp are signed; licensee is not part of the payload.
-    payload = (obj["connection_token"] + obj["timestamp"]).encode()
+    # connection_token + issuer + licensee + timestamp are all signed, in this order.
+    payload = (
+        obj["connection_token"] + obj["issuer"] + obj["licensee"] + obj["timestamp"]
+    ).encode()
     signature = base64.b64decode(obj["signature"])
 
     public_key = serialization.load_pem_public_key(public_pem.encode())
@@ -68,4 +70,4 @@ def test_from_env_with_key_succeeds(monkeypatch, test_key_pair):
     signer = Signer.from_env()
     obj = json.loads(signer.mint("tok"))
     assert obj["connection_token"] == "tok"
-    assert "issuer" not in obj
+    assert obj["issuer"] == ""

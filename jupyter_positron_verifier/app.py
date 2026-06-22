@@ -153,7 +153,7 @@ def create_app(
                 detail="A license for this connection token was already issued",
             )
 
-        license_json = signer_dep.mint(connection_token, licensee=entitlement.licensee)
+        license_json = signer_dep.mint(connection_token, issuer=entitlement.issuer, licensee=entitlement.licensee)
         logger.info(f"Issued license for token (first 8): {connection_token[:8]}...")
         return MintResponse(license=license_json)
 

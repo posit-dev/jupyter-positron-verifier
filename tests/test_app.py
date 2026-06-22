@@ -12,8 +12,8 @@ from jupyter_positron_verifier.store import TokenStore
 
 
 class _FakeEntitlement(EntitlementChecker):
-    def __init__(self, valid: bool = True, licensee: str = "Test Corp"):
-        self._result = EntitlementResult(valid=valid, licensee=licensee)
+    def __init__(self, valid: bool = True, licensee: str = "Test Corp", issuer: str = "Test"):
+        self._result = EntitlementResult(valid=valid, licensee=licensee, issuer=issuer)
 
     async def check(self) -> EntitlementResult:
         return self._result
@@ -50,9 +50,9 @@ class TestMintEndpoint:
         obj = json.loads(body["license"])
         assert obj["connection_token"] == "conn-token-abc"
         assert obj["licensee"] == "Test Corp"
+        assert obj["issuer"] == "Test"
         assert "timestamp" in obj
         assert "signature" in obj
-        assert "issuer" not in obj
 
     def test_duplicate_token_returns_409(self, test_key_pair):
         client = _make_client(test_key_pair)

@@ -17,9 +17,10 @@ CACHE_TTL_SECONDS = 300  # 5 minutes
 
 
 class EntitlementResult:
-    def __init__(self, valid: bool, licensee: str = ""):
+    def __init__(self, valid: bool, licensee: str = "", issuer: str = ""):
         self.valid = valid
         self.licensee = licensee
+        self.issuer = issuer
         self._fetched_at = time.monotonic()
 
     def is_fresh(self) -> bool:
@@ -93,8 +94,9 @@ class EntitlementChecker:
             status = (data.get("status") or "").lower()
             if status in ("activated", "evaluation"):
                 licensee = data.get("licensee", "")
+                issuer = data.get("issuer", "")
                 logger.info(f"Entitlement valid: status={status}, licensee={licensee}")
-                return EntitlementResult(valid=True, licensee=licensee)
+                return EntitlementResult(valid=True, licensee=licensee, issuer=issuer)
             else:
                 logger.error(f"Entitlement invalid: {data}")
                 return EntitlementResult(valid=False)
