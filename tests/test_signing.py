@@ -24,7 +24,7 @@ def test_mint_returns_valid_json(test_key_pair):
     obj = json.loads(result)
     assert obj["connection_token"] == "test-token-abc"
     assert obj["licensee"] == "Test Corp"
-    assert obj["issuer"] == "Positron Department of Licensing"
+    assert obj["issuer"] == ""
     assert "timestamp" in obj
     assert "signature" in obj
 
@@ -70,4 +70,4 @@ def test_from_env_with_key_succeeds(monkeypatch, test_key_pair):
     signer = Signer.from_env()
     obj = json.loads(signer.mint("tok"))
     assert obj["connection_token"] == "tok"
-    assert obj["issuer"] == "Positron Department of Licensing"
+    assert obj["issuer"] == ""
