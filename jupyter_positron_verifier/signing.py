@@ -3,6 +3,8 @@ RSA-PKCS1v1.5-SHA256 license minting.
 
 Matches the verification in Positron's remoteLicenseKey.ts:
   verifier.update(connection_token)
+  verifier.update(issuer)
+  verifier.update(licensee)
   verifier.update(timestamp)
   verifier.verify(publicKey, base64Decode(signature))
 """
@@ -67,25 +69,30 @@ class Signer:
 
         return cls(private_key)
 
-    def mint(self, connection_token: str, licensee: str = "") -> str:
+    def mint(
+        self,
+        connection_token: str,
+        licensee: str = "",
+        issuer: str = "",
+    ) -> str:
         """
         Sign a license for the given connection token and return the license JSON string.
 
-        Only the connection token and timestamp are signed -- the payload is the
-        concatenation (as UTF-8 bytes) of connection_token + timestamp, matching
-        the field update order in remoteLicenseKey.ts. The licensee is included in
-        the JSON for display but is informational and not part of the signed payload.
+        The signed payload is the UTF-8 concatenation of
+        connection_token + issuer + licensee + timestamp. All four
+        fields are carried in the JSON and are part of the signed payload.
         """
         timestamp = _js_timestamp()
-        payload = (connection_token + timestamp).encode()
+        payload = (connection_token + issuer + licensee + timestamp).encode()
 
         signature_bytes = self._key.sign(payload, padding.PKCS1v15(), hashes.SHA256())
         signature_b64 = base64.b64encode(signature_bytes).decode()
 
         license_obj = {
             "connection_token": connection_token,
-            "timestamp": timestamp,
+            "issuer": issuer,
             "licensee": licensee,
+            "timestamp": timestamp,
             "signature": signature_b64,
         }
         return json.dumps(license_obj)

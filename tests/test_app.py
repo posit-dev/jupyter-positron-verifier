@@ -50,9 +50,9 @@ class TestMintEndpoint:
         obj = json.loads(body["license"])
         assert obj["connection_token"] == "conn-token-abc"
         assert obj["licensee"] == "Test Corp"
+        assert obj["issuer"] == "Positron Department of Licensing"
         assert "timestamp" in obj
         assert "signature" in obj
-        assert "issuer" not in obj
 
     def test_duplicate_token_returns_409(self, test_key_pair):
         client = _make_client(test_key_pair)
