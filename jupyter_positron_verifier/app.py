@@ -4,6 +4,7 @@ FastAPI application for the Positron Hub minting service.
 
 import logging
 import os
+from contextlib import asynccontextmanager
 
 import httpx
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -116,9 +117,41 @@ def create_app(
             "JUPYTERHUB_SERVICE_PREFIX", "/services/positron-license/"
         ).rstrip("/")
 
+    @asynccontextmanager
+    async def _lifespan(app: FastAPI):
+        # Refuse to serve when license-manager tells us this deployment is not
+        # entitled, so an unlicensed or misconfigured hub surfaces at startup
+        # rather than as 403s at mint time.
+        #
+        # A merely indeterminate result (license-manager timed out or crashed)
+        # is not grounds for refusing to boot: it may clear on its own, and a
+        # flaky subprocess should not take down the Hub. Mints keep failing
+        # closed until the check succeeds, so nothing is issued unentitled.
+        checker = entitlement if entitlement is not None else get_entitlement()
+        result = await checker.check()
+        if not result.valid and result.determinate:
+            raise RuntimeError(
+                "Positron entitlement check failed at startup: license-manager "
+                "reports this deployment is not entitled. Ensure "
+                "POSITRON_LICENSE_MANAGER_PATH points at the license-manager "
+                "binary and a valid license is activated."
+            )
+        if not result.valid:
+            logger.warning(
+                "Could not determine Positron entitlement at startup; starting "
+                "anyway and will retry. Mint requests fail with 403 until the "
+                "entitlement check succeeds."
+            )
+        else:
+            logger.info(
+                f"Entitlement verified at startup (licensee: {result.licensee})"
+            )
+        yield
+
     application = FastAPI(
         title="Positron License Verifier",
         description="Mints short-lived Positron Server license tokens for JupyterHub sessions.",
+        lifespan=_lifespan,
     )
 
     if signer is not None:

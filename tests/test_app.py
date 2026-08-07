@@ -12,8 +12,16 @@ from jupyter_positron_verifier.store import TokenStore
 
 
 class _FakeEntitlement(EntitlementChecker):
-    def __init__(self, valid: bool = True, licensee: str = "Test Corp", issuer: str = "Test"):
-        self._result = EntitlementResult(valid=valid, licensee=licensee, issuer=issuer)
+    def __init__(
+        self,
+        valid: bool = True,
+        licensee: str = "Test Corp",
+        issuer: str = "Test",
+        determinate: bool = True,
+    ):
+        self._result = EntitlementResult(
+            valid=valid, licensee=licensee, issuer=issuer, determinate=determinate
+        )
 
     async def check(self) -> EntitlementResult:
         return self._result
@@ -90,5 +98,44 @@ class TestMintEndpoint:
             resp = client.post(
                 "/services/positron-license/mint",
                 json={"connection_token": f"tok-{i}"},
+            )
+            assert resp.status_code == 200
+
+
+class TestStartupEntitlementCheck:
+    def test_startup_fails_closed_when_entitlement_invalid(self, test_key_pair):
+        _, private_pem, _ = test_key_pair
+        app = create_app(
+            service_prefix="/services/positron-license",
+            signer=Signer.from_pem(private_pem),
+            entitlement=_FakeEntitlement(valid=False),
+            store=TokenStore(),
+        )
+        with pytest.raises(RuntimeError, match="not entitled"):
+            with TestClient(app):
+                pass
+
+    def test_startup_tolerates_indeterminate_entitlement(self, test_key_pair):
+        # license-manager did not answer: boot anyway, but mints stay closed.
+        _, private_pem, _ = test_key_pair
+        app = create_app(
+            service_prefix="/services/positron-license",
+            signer=Signer.from_pem(private_pem),
+            entitlement=_FakeEntitlement(valid=False, determinate=False),
+            store=TokenStore(),
+        )
+        app.dependency_overrides[verify_hub_token] = lambda: "testuser"
+        with TestClient(app) as client:
+            resp = client.post(
+                "/services/positron-license/mint",
+                json={"connection_token": "indeterminate-token"},
+            )
+            assert resp.status_code == 403
+
+    def test_startup_succeeds_when_entitlement_valid(self, test_key_pair):
+        with _make_client(test_key_pair) as client:
+            resp = client.post(
+                "/services/positron-license/mint",
+                json={"connection_token": "startup-ok-token"},
             )
             assert resp.status_code == 200
