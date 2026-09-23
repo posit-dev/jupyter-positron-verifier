@@ -1,5 +1,9 @@
 # jupyter-positron-verifier
 
+> [!CAUTION]
+> This package is no longer needed to run Positron Server on JupyterHub. It is **not** recommended to use this package.
+> Rather, follow the instructions given by `jupyter-positron-server`: https://posit-dev.github.io/jupyter-positron-server/
+
 A JupyterHub managed service that mints short-lived, cryptographically signed Positron Server license tokens for per-session use.
 
 ## What it does
@@ -12,20 +16,6 @@ When Positron Server runs inside a JupyterHub environment, it needs a per-sessio
 4. **Prevents reuse** — tracks issued connection tokens so each one gets exactly one license.
 
 The single HTTP endpoint is `POST {SERVICE_PREFIX}/mint`.
-
-## Configuration
-
-All configuration is via environment variables. JupyterHub sets the `JUPYTERHUB_*` variables automatically for managed services.
-
-| Variable | Description |
-|---|---|
-| `JUPYTERHUB_API_URL` | Hub API base URL (default: `http://hub:8081/hub/api`) |
-| `JUPYTERHUB_API_TOKEN` | This service's own Hub token (set automatically by JupyterHub) |
-| `JUPYTERHUB_SERVICE_PREFIX` | URL prefix for this service (default: `/services/positron-license/`) |
-| `POSITRON_MINTING_KEY` | PEM-encoded RSA private key (literal string) |
-| `POSITRON_MINTING_KEY_FILE` | Path to a PEM-encoded RSA private key file (used if `POSITRON_MINTING_KEY` is unset) |
-| `POSITRON_LICENSE_MANAGER_PATH` | Path to the `license-manager` binary for entitlement checks |
-| `PORT` | Port to listen on (default: `8099`) |
 
 ## Running
 
